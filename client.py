@@ -495,4 +495,99 @@ class PhantomFeudClient:
         self.connected = False
         if self.socket:
             self.socket.close()
+            
+    def draw_game(self):
+        """Draw all game elements"""
+        self.screen.fill(BLACK)
+        
+        for x in range(0, SCREEN_WIDTH, 50):
+            pygame.draw.line(self.screen, GRAY, (x, 0), (x, SCREEN_HEIGHT), 1)
+        for y in range(0, SCREEN_HEIGHT, 50):
+            pygame.draw.line(self.screen, GRAY, (0, y), (SCREEN_WIDTH, y), 1)
+            
+        for player_id, player in self.other_players.items():
+            self.draw_character(
+                player['x'], player['y'],
+                player['character'],
+                player.get('action', 'idle'),
+                player.get('direction', 'down')
+            )
+            self.draw_health_bar(
+                player['x'], player['y'] - 60,
+                player.get('health', 100)
+                player.get('max_health', 100)
+            )
+            
+        self.draw_character(
+            self.local_x, self.local_y,
+            self.my_character,
+            self.local_action,
+            self.local_direction
+        )
+        self.draw_health_bar(
+            self.local_x, self.local_y - 60,
+            self.local_health,
+            self.local_max_health
+        )
+        
+        if self.attack_cooldown > 0:
+            cooldown_text = self.font.render(f"Attack: {self.attack_cooldown//6}", True, GRAY)
+            self.screen.blit(cooldown_text, (10, 60))
+            
+        if self.special_cooldown > 0:
+            special_text = self.font.render(f"Special: {self.special_cooldown//6}", True, GRAY)
+            self.screen.blit(special_text, (10, 90))
+            
+        self.draw_large_health_bar(10, 10, self.local_health, self.local_max_health)
+        
+        try:
+            controls = self.font.render("WASD/Arrows: Move | SPACE/F: Attack | E: Special", True, WHITE)
+            controls_rect = controls.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT - 20))
+            self.screen.blit(controls, controls_rect)
+        except:
+            pass
+        
+        
+    def draw_character(self, x, y, character_name, action, direction):
+        """Draw a character with current animation"""
+        if character_name in self.character_animations:
+            animations: self.character_animations[character_name]
+            
+            anim_key = action if action in animations else "idle"
+            
+            if action in ['shield', 'protect', 'scream', 'flight', 'charge', 'blood_charge']:
+                if action in animations:
+                    anim_key = action
+                elif 'shield' in animations:
+                    anim_key = 'shield'
+                elif 'protect' in animations:
+                    anim_key = 'protect'
+                    
+            frames = animations.get(anim_key, animations.get('idle', []))
+            
+            if frames:
+                frame_index = self.current_animation_frame % len(frames)
+                
+                img = frames[frame_index].copy()
+                
+                if direction == "left":
+                    img = pygame.transform.flip(img, True, False)
+                    
+                rect = img.get_rect(center=(int(x), int(y)))
+                self.screen.blit(img, rect)
+                
+                try:
+                    name_text = self.font.render(character_name.replace('_', ' ')[:12], True, WHITE)
+                    name_rect = name_text.get_rect(center=(int(x), int(y) - 45))
+                    self.screen.blit(name_text, name_rect)
+                except:
+                    pass
+                
+                return
+            
+        color = BLUE if character_name == self.my_character else RED
+        pygame.draw.rect(self.screen, color, (int(x) - 25, int(y) - 25, 50, 50))
+        pygame.draw.circle(self.screen, WHITE, (int(x), int(y)), 5)
+            
+        
                                     
