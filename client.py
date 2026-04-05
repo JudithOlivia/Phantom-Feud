@@ -16,6 +16,7 @@ RED = (255, 0, 0)
 GREEN = (0, 255, 0)
 BLUE = (0, 100, 255)
 GRAY = (100, 100, 100)
+GOLD = (255, 215, 0)
 
 class PhantomFeudClient:
     def __init__(self, server_ip="127.0.0.1", server_port=5555):
@@ -39,7 +40,7 @@ class PhantomFeudClient:
         self.local_y = 400
         self.local_direction = "down"
         self.local_health = 100
-        self.local_max_health
+        self.local_max_health = 100
         self.local_action = "idle"
         self.local_attack_timer = 0
         
@@ -54,6 +55,11 @@ class PhantomFeudClient:
         self.available_characters = self.scan_characters()
         self.selected_character_index = 0
         
+        self.sounds = self.load_sounds()
+        self.backgrounds = self.load_backgrounds()
+        self.selected_background = 0
+        self.current_background = None
+        
         try:
             self.font = pygame.font.Font("assets/fonts/medieval.ttf", 24)
             self.big_font = pygame.font.Font("assets/fonts/medieval.ttf", 48)
@@ -62,7 +68,6 @@ class PhantomFeudClient:
             self.font = pygame.font.Font(None, 24)
             self.big_font = pygame.font.Font(None, 48)
             
-        self.sounds = self.load_sounds()
         
         self.last_position_send = 0
         self.position_send_delay = 0.05
@@ -113,7 +118,32 @@ class PhantomFeudClient:
         print(f"Loaded {len(sounds)} sounds")
         return sounds
     
-    
+    def load_backgrounds(self):
+        """Load all background images from assets/background folder"""
+        backgrounds = []
+        bg_path = "assets/background"
+        
+        if os.path.exists(bg_path):
+            for i in range(1, 5):
+                filename = f"Battleground{i}.png"
+                file_path = os.path.join(bg_path, filename)
+                if os.path.exists(file_path):
+                    try:
+                        img = pygame.image.load(file_path).convert()
+                        img = pygame.transform.scale(img, (SCREEN_WIDTH, SCREEN_HEIGHT))
+                        
+                        backgrounds.append(img)
+                        print(f"loaded background: {filename}")
+                    except Exception as e:
+                        print(f"Could not load {filename}: {e}")
+        if not backgrounds:
+            print("No backgrounds found, using fallback")
+            fallback = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            fallback.fill((30, 30, 50))
+            backgrounds.append(fallback)
+            
+        return backgrounds
+        
     def play_sound(self, sound_name):
         """Play a sound effect"""
         if sound_name in self.sounds:
@@ -131,45 +161,44 @@ class PhantomFeudClient:
             print(f"Character path not found: {character_path}")
             character_path = "assets/characters/Default"
             
-            animation_types = {
-                'idle': ['Idle.png'],
-                'walk': ['Walk.png'],
-                'run': ['Run.png'],
-                'attack': ['Attack_1.png', 'Attack_2.png', 'Attack_3.png'],
-                'hurt': ['Hurt.png'],
-                'dead': ['Dead.png'],
-                'jump': ['Jump.png'],
-                'shield': ['Shield.png'],
-                'scream': ['Scream.png'],
-                'flight': ['Flight.png'],
-                'protect': ['Protect.png'],
-                'charge': ['Charge_1.png', 'Charge_2.png', 'Charge_3.png', 'Charge_4.png'],
-                'blood_charge': ['Blood_Charge_1.png', 'Blood_Charge_2.png', 'Blood_Charge_3.png', 'Blood_Charge_4.png'],
-            }
+        animation_types = {
+            'idle': ['Idle.png'],
+            'walk': ['Walk.png'],
+            'run': ['Run.png'],
+            'attack': ['Attack_1.png', 'Attack_2.png', 'Attack_3.png'],
+            'hurt': ['Hurt.png'],
+            'dead': ['Dead.png'],
+            'jump': ['Jump.png'],
+            'shield': ['Shield.png'],
+            'scream': ['Scream.png'],
+            'flight': ['Flight.png'],
+            'protect': ['Protect.png'],
+            'charge': ['Charge_1.png', 'Charge_2.png', 'Charge_3.png', 'Charge_4.png'],
+            'blood_charge': ['Blood_Charge_1.png', 'Blood_Charge_2.png', 'Blood_Charge_3.png', 'Blood_Charge_4.png'],
+        }
             
-            for anim_name, files in animation_types.items():
-                frames = []
+        for anim_name, files in animation_types.items():
+            frames = []
             for file in files:
                 file_path = os.path.join(character_path, file)
                 if os.path.exists(file_path):
                     try:
                         img = pygame.image.load(file_path).convert_alpha()
-                        # Scale to reasonable size
                         img = pygame.transform.scale(img, (80, 80))
                         frames.append(img)
                     except Exception as e:
                         pass
                     
-                if frames:
-                    animations[anim_name] = frames
+            if frames:
+                animations[anim_name] = frames
                     
-            if not animations:
-                animations['idle'] = [self.create_fallback_surface(character_name)]
-                animations['walk'] = [self.create_fallback_surface(character_name)]
-                animations['attack'] = [self.create_fallback_surface(character_name)]
+        if not animations:
+            animations['idle'] = [self.create_fallback_surface(character_name)]
+            animations['walk'] = [self.create_fallback_surface(character_name)]
+            animations['attack'] = [self.create_fallback_surface(character_name)]
             
-            print(f"Loaded {len(animations)} animations for {character_name}")
-            return animations
+        print(f"Loaded {len(animations)} animations for {character_name}")
+        return animations
         
     def create_fallback_surface(self, character_name):
         """Create a colored rectangle if images can't be loaded"""
@@ -213,7 +242,7 @@ class PhantomFeudClient:
             print(f"Send error: {e}")
             self.connected = False
             
-    def recieve_messages(self):
+    def receive_messages(self):
         """Background thread to receive messages from server"""
         while self.connected:
             try:
@@ -228,7 +257,7 @@ class PhantomFeudClient:
             
     def handle_server_message(self, message):
         """Process messages from server"""
-        msg_type = message.ger("type")
+        msg_type = message.get("type")
         data = message.get("data", {})
         
         if msg_type == "init":
@@ -297,20 +326,21 @@ class PhantomFeudClient:
             elif player_id in self.other_players:
                 self.other_players[player_id]['action'] = 'dead'
                 
-        elif msg_type == "player_died":
-            player_id = data.get("id")
-            if player_id == self.my_id:
-                self.local_action = "dead"
-                self.play_sound('dead')
-            elif player_id in self.other_players:
-                self.other_players[player_id]['action'] = 'dead'
                 
     def character_select_screen(self):
         """Show character selection menu"""
         selecting = True
         
         while selecting and self.running:
-            self.screen.fill(BLACK)
+            if self.backgrounds and self.selected_background < len(self.backgrounds):
+                self.screen.blit(self.backgrounds[self.selected_background], (0, 0))
+            else:
+                self.screen.fill(BLACK)
+                
+            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            overlay.set_alpha(180)
+            overlay.fill(BLACK)
+            self.screen.blit(overlay, (0, 0))
             
             try:
                 title = self.big_font.render("PHANTOM FEUD", True, WHITE)
@@ -325,26 +355,59 @@ class PhantomFeudClient:
             
             char_name = self.available_characters[self.selected_character_index]
             
-            if char_name not in self.character_animations:
-                self.character_animations[char_name] = self.load_character_animations(char_name)
+            char_path = f"assets/characters/{char_name}/main.png"
+            preview_img = None 
+            
+            if os.path.exists(char_path):
+                try:
+                    preview_img = pygame.image.load(char_path).convert_alpha()
+                    preview_img = pygame.transform.scale(preview_img, (200, 200))
+                    print(f"Loaded main.png for {char_name}")
+                except Exception as e:
+                    preview_img = None
                 
-            preview_anim = self.character_animations[char_name]
-            if 'idle' in preview_anim and preview_anim['idle']:
-                preview_img = preview_anim['idle'][0]
-                preview_rect = preview_img.get_rect(center=(SCREEN_WIDTH//2, 350))
+            if preview_img:
+                preview_rect = preview_img.get_rect(center=(SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 - 50))
                 self.screen.blit(preview_img, preview_rect)
+            else:
+                if char_name in self.character_animations:
+                    anim = self.character_animations[char_name]
+                    if 'idle' in anim and anim['idle']:
+                        fallback_img = pygame.transform.scale(anim['idle'][0], (150, 150))
+                        preview_rect = fallback_img.get_rect(center=(SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 - 50))
+                        self.screen.blit(fallback_img, preview_rect)
+                pygame.draw.rect(self.screen, GRAY, (SCREEN_WIDTH//2 - 230, SCREEN_HEIGHT//2 - 130, 260, 260), 3)
                 
             name_text = self.font.render(char_name.upper().replace('_', ' '), True, WHITE)
-            name_rect = name_text.get_rect(center=(SCREEN_WIDTH//2, 450))
+            name_rect = name_text.get_rect(center=(SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 + 120))
             self.screen.blit(name_text, name_rect)
             
-            controls = self.font.render("LEFT / RIGHT to change     ENTER to fight", True, GRAY)
-            controls_rect = controls.get_rect(center=(SCREEN_WIDTH//2, 650))
+            bg_name = f"Battleground {self.selected_background + 1}"
+            bg_text = self.font.render("ARENA:", True, WHITE)
+            bg_text_rect = bg_text.get_rect(center=(SCREEN_WIDTH//2 + 150, SCREEN_HEIGHT//2 - 80))
+            self.screen.blit(bg_text, bg_text_rect)
+            
+            bg_name_text = self.font.render(bg_name, True, GOLD)
+            bg_name_rect = bg_name_text.get_rect(center=(SCREEN_WIDTH//2 + 150, SCREEN_HEIGHT//2 - 40))
+            self.screen.blit(bg_name_text, bg_name_rect)
+                             
+            if self.backgrounds and len(self.backgrounds)  >  self.selected_background:
+                small_bg = pygame.transform.scale(self.backgrounds[self.selected_background], (200, 150))
+            bg_preview_rect = small_bg.get_rect(center=(SCREEN_WIDTH//2 + 150, SCREEN_HEIGHT//2 + 40))
+            self.screen.blit(small_bg, bg_preview_rect)
+            pygame.draw.rect(self.screen, WHITE, bg_preview_rect, 3)
+            
+            controls = self.font.render("← →  Change Character", True, GRAY)
+            controls_rect = controls.get_rect(center=(SCREEN_WIDTH//2- 150, SCREEN_HEIGHT - 80))
             self.screen.blit(controls, controls_rect)
             
-            server_text = self.font.render(f"Connecting to: {self.server_ip}:{self.server_port}", True, BLUE)
-            server_rect = server_text.get_rect(center=(SCREEN_WIDTH//2, 720))
-            self.screen.blit(server_text, server_rect)
+            controls_bg = self.font.render("↑ ↓  Change Arena", True, GRAY)
+            controls_bg_rect = controls_bg.get_rect(center=(SCREEN_WIDTH//2 + 150, SCREEN_HEIGHT - 80))
+            self.screen.blit(controls_bg, controls_bg_rect)
+
+            controls_enter = self.font.render("ENTER  to Fight!", True, WHITE)
+            controls_enter_rect = controls_enter.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT - 40))
+            self.screen.blit(controls_enter, controls_enter_rect)
             
             pygame.display.flip()
             
@@ -357,6 +420,10 @@ class PhantomFeudClient:
                         self.selected_character_index = (self.selected_character_index - 1) % len(self.available_characters)
                     elif event.key == pygame.K_RIGHT:
                         self.selected_character_index = (self.selected_character_index + 1) % len(self.available_characters)
+                    elif event.key == pygame.K_UP:
+                        self.selected_background = (self.selected_background - 1) % len(self.backgrounds)
+                    elif event.key == pygame.K_DOWN:
+                        self.selected_background = (self.selected_background + 1) % len(self.backgrounds)
                     elif event.key == pygame.K_RETURN:
                         selecting = False
             
@@ -366,7 +433,6 @@ class PhantomFeudClient:
     
     def run_game(self):
         """Main game loop"""
-        # Connect to server
         if not self.connect_to_server():
             print("Failed to connect to server. Make sure server.py is running.")
             return
@@ -374,11 +440,15 @@ class PhantomFeudClient:
         selected_character = self.character_select_screen()
         if not selected_character:
             return
+        if self.backgrounds and self.selected_background < len(self.backgrounds):
+            self.current_background = self.backgrounds[self.selected_background]
+        else:
+            self.current_background = self.backgrounds[0] if self.backgrounds else None
         
         self.send_message("character_select", {"character": selected_character})
         self.my_character = selected_character
         
-        receive_thread = threading.thread(target=self.recieve_messages)
+        receive_thread = threading.Thread(target=self.receive_messages)
         receive_thread.daemon = True
         receive_thread.start()
         
@@ -409,9 +479,9 @@ class PhantomFeudClient:
                             self.attack_cooldown = 30
                             self.send_message("attack", {})
                             self.play_sound('hit')
-                        elif event.key == pygame.K_e:
-                            if self.special_cooldown <= 0 and self.local_action != "dead":
-                                ability = None
+                    elif event.key == pygame.K_e:
+                        if self.special_cooldown <= 0 and self.local_action != "dead":
+                            ability = None
                             if self.my_character in ["Samurai", "Shinobi", "Default"]:
                                 ability = "shield"
                             elif self.my_character in ["Converted_Vampire"]:
@@ -498,7 +568,10 @@ class PhantomFeudClient:
             
     def draw_game(self):
         """Draw all game elements"""
-        self.screen.fill(BLACK)
+        if self.current_background:
+            self.screen.blit(self.current_background, (0,0))
+        else:
+            self.screen.fill(BLACK)
         
         for x in range(0, SCREEN_WIDTH, 50):
             pygame.draw.line(self.screen, GRAY, (x, 0), (x, SCREEN_HEIGHT), 1)
@@ -514,7 +587,7 @@ class PhantomFeudClient:
             )
             self.draw_health_bar(
                 player['x'], player['y'] - 60,
-                player.get('health', 100)
+                player.get('health', 100),
                 player.get('max_health', 100)
             )
             
@@ -551,7 +624,7 @@ class PhantomFeudClient:
     def draw_character(self, x, y, character_name, action, direction):
         """Draw a character with current animation"""
         if character_name in self.character_animations:
-            animations: self.character_animations[character_name]
+            animations = self.character_animations[character_name]
             
             anim_key = action if action in animations else "idle"
             
@@ -623,3 +696,19 @@ class PhantomFeudClient:
             self.screen.blit(health_text, (x+10, y+3))
         except:
             pass
+        
+def main():
+    server_ip = "127.0.0.1"
+    if len(sys.argv) > 1:
+        server_ip = sys.argv[1]
+            
+    print(f"Starting Phantom Feud client, connecting to {server_ip}:5555")
+        
+    client = PhantomFeudClient(server_ip)
+    client.run_game()
+        
+    pygame.quit()
+    sys.exit()
+        
+if __name__ == "__main__":
+    main()
