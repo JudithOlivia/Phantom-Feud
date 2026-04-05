@@ -28,6 +28,13 @@ class PhantomFeudClient:
         self.players = {}
         self.other_players = {}
         
+        self.socket = None
+        self.server_ip = server_ip
+        self.server_port = server_port
+        self.connected = False
+        self.my_id = None
+        self.my_character = None
+        
         self.local_x = 400
         self.local_y = 400
         self.local_direction = "down"
@@ -182,3 +189,39 @@ class PhantomFeudClient:
         surface.fill(color)
         pygame.draw.rect(surface, WHITE, surface.get_rect(), 2)
         return surface
+    
+    def connect_to_server(self):
+        """Connect to the game server"""
+        try:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.connect((self.server_ip, self.server_port))
+            self.connected = True
+            print(f"Connected to server at {self.server_ip}:{self.server_port}")
+            return True
+        except Exception as e:
+            print(f"Could not connect to server: {e}")
+            return False
+        
+    def send_message(self, msg_type, data):
+        """Send a message to the server"""
+        if not self.connected or not self.socket:
+            return 
+        try:
+            message = json.dumps({"type": msg_type, "data": data})
+            self.socket.send(message.encode())
+        except Exception as e:
+            print(f"Send error: {e}")
+            self.connected = False
+            
+    def recieve_messages(self):
+        """Background thread to receive messages from server"""
+        while self.connected:
+            try:
+                data = self.socket.recv(4096)
+                if not data:
+                    break
+                message = json.loads(data.decode())
+                self.handle_server_message(message)
+            except Exception as e:
+                print(f"Recieve error: {e}")
+                break
