@@ -590,4 +590,4 @@ class PhantomFeudClient:
         pygame.draw.circle(self.screen, WHITE, (int(x), int(y)), 5)
             
         
-                                    
+    def draw_health_bar(self, x, y, current, maximum): # background - red, helth - green
