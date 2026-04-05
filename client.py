@@ -225,3 +225,274 @@ class PhantomFeudClient:
             except Exception as e:
                 print(f"Recieve error: {e}")
                 break
+            
+    def handle_server_message(self, message):
+        """Process messages from server"""
+        msg_type = message.ger("type")
+        data = message.get("data", {})
+        
+        if msg_type == "init":
+            self.my_id = data.get("id")
+            self.my_character = data.get("character", self.my_character)
+            print(f"Initialized as player {self.my_id} with character {self.my_character}")
+            
+            if self.my_character not in self.character_animations:
+                self.character_animations[self.my_character] = self.load_character_animations(self.my_character)
+                
+        elif msg_type == "player_joined":
+            player_id = data.get("id")
+            character = data.get("character", "Default")
+            
+            if character not in self.character_animations:
+                self.character_animations[character] = self.load_character_animations(character)
+                
+            self.other_players[player_id] = {
+                'id': player_id,
+                'character': character,
+                'x': data.get('x', 400),
+                'y': data.get('y', 400),
+                'health': 100,
+                'max_health': 100,
+                'direction': 'down',
+                'action': 'idle'
+            }
+            print(f"Player {player_id} ({character}) joined")
+            
+        elif msg_type == "player_left":
+            player_id = data.get("id")
+            if player_id in self.other_players:
+                del self.other_players[player_id]
+                print(f"Player {player_id} left")
+                
+        elif msg_type == "player_moved":
+            player_id = data.get("id")
+            if player_id in self.other_players:
+                self.other_players[player_id]['x'] = data.get('x')
+                self.other_players[player_id]['y'] = data.get('y')
+                self.other_players[player_id]['direction'] = data.get('direction')
+                
+        elif msg_type == "player_attacked":
+            player_id = data.get("id")
+            if player_id in self.other_players:
+                self.other_players[player_id]['action'] = 'attack'
+                
+        elif msg_type == "player_hit":
+            target_id = data.get("target_id")
+            damage = data.get("damage")
+            new_health = data.get("new_health")
+            
+            if target_id == self.my_id:
+                self.local_health = new_health 
+                self.local_action = "hurt"
+                self.play_sound('hit')
+            elif target_id in self.other_players:
+                self.other_players[target_id]['health'] = new_health
+                self.other_players[target_id]['action'] = 'hurt'
+                
+        elif msg_type == "player_died":
+            player_id = data.get("id")
+            if player_id == self.my_id:
+                self.local_action = "dead"
+                self.play_sound('dead')
+            elif player_id in self.other_players:
+                self.other_players[player_id]['action'] = 'dead'
+                
+        elif msg_type == "player_died":
+            player_id = data.get("id")
+            if player_id == self.my_id:
+                self.local_action = "dead"
+                self.play_sound('dead')
+            elif player_id in self.other_players:
+                self.other_players[player_id]['action'] = 'dead'
+                
+    def character_select_screen(self):
+        """Show character selection menu"""
+        selecting = True
+        
+        while selecting and self.running:
+            self.screen.fill(BLACK)
+            
+            try:
+                title = self.big_font.render("PHANTOM FEUD", True, WHITE)
+            except:
+                title = self.font.render("PHANTOM FEUD", True, WHITE)
+            title_rect = title.get_rect(center=(SCREEN_WIDTH//2, 100))
+            self.screen.blit(title, title_rect)
+            
+            instr = self.font.render("Select Your Warrior", True, GRAY)
+            instr_rect = instr.get_rect(center=(SCREEN_WIDTH//2, 180))
+            self.screen.blit(instr, instr_rect)
+            
+            char_name = self.available_characters[self.selected_character_index]
+            
+            if char_name not in self.character_animations:
+                self.character_animations[char_name] = self.load_character_animations(char_name)
+                
+            preview_anim = self.character_animations[char_name]
+            if 'idle' in preview_anim and preview_anim['idle']:
+                preview_img = preview_anim['idle'][0]
+                preview_rect = preview_img.get_rect(center=(SCREEN_WIDTH//2, 350))
+                self.screen.blit(preview_img, preview_rect)
+                
+            name_text = self.font.render(char_name.upper().replace('_', ' '), True, WHITE)
+            name_rect = name_text.get_rect(center=(SCREEN_WIDTH//2, 450))
+            self.screen.blit(name_text, name_rect)
+            
+            controls = self.font.render("LEFT / RIGHT to change     ENTER to fight", True, GRAY)
+            controls_rect = controls.get_rect(center=(SCREEN_WIDTH//2, 650))
+            self.screen.blit(controls, controls_rect)
+            
+            server_text = self.font.render(f"Connecting to: {self.server_ip}:{self.server_port}", True, BLUE)
+            server_rect = server_text.get_rect(center=(SCREEN_WIDTH//2, 720))
+            self.screen.blit(server_text, server_rect)
+            
+            pygame.display.flip()
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return None
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_LEFT:
+                        self.selected_character_index = (self.selected_character_index - 1) % len(self.available_characters)
+                    elif event.key == pygame.K_RIGHT:
+                        self.selected_character_index = (self.selected_character_index + 1) % len(self.available_characters)
+                    elif event.key == pygame.K_RETURN:
+                        selecting = False
+            
+            self.clock.tick(FPS)
+        
+        return self.available_characters[self.selected_character_index]
+    
+    def run_game(self):
+        """Main game loop"""
+        # Connect to server
+        if not self.connect_to_server():
+            print("Failed to connect to server. Make sure server.py is running.")
+            return
+        
+        selected_character = self.character_select_screen()
+        if not selected_character:
+            return
+        
+        self.send_message("character_select", {"character": selected_character})
+        self.my_character = selected_character
+        
+        receive_thread = threading.thread(target=self.recieve_messages)
+        receive_thread.daemon = True
+        receive_thread.start()
+        
+        timeout = 50
+        while self.my_id is None and timeout > 0 and self.running:
+            pygame.time.wait(100)
+            timeout -= 1
+            
+        if self.my_id is None:
+            print("Failed to get player ID from server")
+            return 
+        
+        print("Game starting!")
+        
+        game_running = True
+        current_time = 0
+        
+        while game_running and self.running:
+            current_time = pygame.time.get_ticks() / 1000.0
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    game_running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE or event.key == pygame.K_f:
+                        if self.attack_cooldown <= 0 and self.local_action != "dead":
+                            self.local_action = "attack"
+                            self.attack_cooldown = 30
+                            self.send_message("attack", {})
+                            self.play_sound('hit')
+                        elif event.key == pygame.K_e:
+                            if self.special_cooldown <= 0 and self.local_action != "dead":
+                                ability = None
+                            if self.my_character in ["Samurai", "Shinobi", "Default"]:
+                                ability = "shield"
+                            elif self.my_character in ["Converted_Vampire"]:
+                                ability = "protect"
+                            elif self.my_character in ["Gotoku", "Onre", "Yurei"]:
+                                ability = "scream"
+                            elif self.my_character in ["Onre"]:
+                                ability = "flight"
+                            elif self.my_character in ["Countess_Vampire", "Yurei"]:
+                                ability = "charge"
+                            elif self.my_character in ["Countess_Vampire"]:
+                                ability = "blood_charge"
+                            if ability:
+                                self.local_action = ability
+                                self.special_cooldown = 120
+                                self.send_message("special", {"ability": ability})
+                                if ability in ['protect', 'shield']:
+                                    self.play_sound('protect')
+            
+            keys = pygame.key.get_pressed()
+            dx = 0
+            dy = 0
+            move_speed = 5
+            
+            if keys[pygame.K_w] or keys[pygame.K_UP]:
+                dy = -move_speed
+                self.local_direction = "up"
+            if keys[pygame.K_s] or keys[pygame.K_DOWN]:
+                dy = move_speed
+                self.local_direction = "down"
+            if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+                dx = -move_speed
+                self.local_direction = "left"
+            if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+                dx = move_speed
+                self.local_direction = "right"
+                
+            if (dx != 0 or dy != 0) and self.local_action not in ["attack", "hurt", "dead"]:
+                if abs(dx) + abs(dy) > move_speed:
+                    if self.local_action != "run":
+                        self.local_action = "run"
+                else:
+                    if self.local_action != "walk":
+                        self.local_action = "walk"
+                        
+                if current_time - self.last_position_send > self.position_send_delay:
+                    self.send_message("movement", {
+                        "x": self.local_x,
+                        "y": self.local_y,
+                        "direction": self.local_direction
+                    })
+                    self.last_position_send = current_time
+                    
+            else:
+                if self.local_action not in ["attack", "hurt", "dead"] and self.local_action not in ["run", "walk"]:
+                    self.local_action = "idle"
+                    
+            if dx != 0 or dy != 0:
+                self.local_x += dx
+                self.local_y += dy
+                self.local_x = max(50, min(SCREEN_WIDTH - 50, self.local_x))
+                self.local_y = max(50, min(SCREEN_HEIGHT - 50, self.local_y))
+                
+            if self.attack_cooldown > 0:
+                self.attack_cooldown -= 1
+                if self.attack_cooldown == 0 and self.local_action == "attack":
+                    self.local_action = "idle"
+                    
+            if self.special_cooldown > 0:
+                self.special_cooldown -= 1
+                
+            if current_time - self.last_animation_update > self.animation_speed:
+                self.last_animation_update = current_time
+                self.current_animation_frame = (self.current_animation_frame + 1) % 6
+                
+            self.draw_game()
+            
+            pygame.display.flip()
+            self.clock.tick(FPS)
+            
+        self.connected = False
+        if self.socket:
+            self.socket.close()
+                                    
