@@ -590,4 +590,36 @@ class PhantomFeudClient:
         pygame.draw.circle(self.screen, WHITE, (int(x), int(y)), 5)
             
         
-    def draw_health_bar(self, x, y, current, maximum): # background - red, helth - green
+    def draw_health_bar(self, x, y, current, maximum):
+        """Draw health bar above character"""
+        bar_width = 70
+        bar_height = 8
+        health_percent = current / maximum if maximum > 0 else 0
+        
+        pygame.draw.rect(self.screen, RED, (int(x - bar_width//2), int(y), bar_width, bar_height))
+        pygame.draw.rect(self.screen, GREEN, (int(x - bar_width//2), int(y), int(bar_width * health_percent), bar_height))
+        
+        try: 
+            health_text = self.font.render(f"{current}/{maximum}", True, WHITE)
+            text_rect = health_text.get_rect(center=(int(x), int(y - 12)))
+            self.screen.blit(health_text, text_rect)
+        except:
+            pass
+        
+    def draw_large_health_bar(self, x, y, current, maximum):
+        """Draw large health bar at screen corner"""
+        bar_width = 300
+        bar_height = 25
+        health_percent = current / maximum if maximum > 0 else 0
+        
+        pygame.draw.rect(self.screen, RED, (x, y, bar_width, bar_height))
+        
+        pygame.draw.rect(self.screen, GREEN, (x, y, int(bar_width * health_percent), bar_height))
+        
+        pygame.draw.rect(self.screen, WHITE, (x, y, bar_width, bar_height), 2)
+        
+        try:
+            health_text = self.font.render(f"HEALTH: {current}/{maximum}", True, WHITE)
+            self.screen.blit(health_text, (x+10, y+3))
+        except:
+            pass
