@@ -7,8 +7,8 @@ import socket
 
 pygame.init()
 
-SCREEN_WIDTH = 1200
-SCREEN_HEIGHT = 800
+SCREEN_WIDTH = 800
+SCREEN_HEIGHT = 600
 FPS = 60
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
