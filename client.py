@@ -36,20 +36,30 @@ class PhantomFeudClient:
         self.my_id = None
         self.my_character = None
         
-        self.local_x = 400
-        self.local_y = 400
-        self.local_direction = "down"
-        self.local_health = 100
-        self.local_max_health = 100
-        self.local_action = "idle"
-        self.local_attack_timer = 0
+        self.p1_x = 300
+        self.p1_y = 400
+        self.p1_direction = "down"
+        self.p1_health = 100
+        self.p1_max_health = 100
+        self.p1_action = "idle"
+        self.p1_character = None
+        
+        self.p2_x = 500
+        self.p2_y = 400
+        self.p2_direction = "down"
+        self.p2_health = 100
+        self.p2_max_health = 100
+        self.p2_action = "idle"
+        self.p2_character = None
         
         self.character_animations = {}
         self.current_animation_frame = 0
         self.animation_speed = 0.15
         self.last_animation_update = 0
         
-        self.attack_cooldown = 0
+        self.attack_cooldown_p1 = 0
+        self.attack_cooldown_p2 = 0
+        self.local_attack_timer = 0
         self.special_cooldown = 0
         
         self.available_characters = self.scan_characters()
@@ -59,6 +69,12 @@ class PhantomFeudClient:
         self.backgrounds = self.load_backgrounds()
         self.selected_background = 0
         self.current_background = None
+        
+        self.menu_state = "main"
+        self.selected_player = None
+        self.confirmed_character_p1 = None
+        self.confirmed_character_p2 = None
+        self.confirmed_background = 0
         
         try:
             self.font = pygame.font.Font("assets/fonts/medieval.ttf", 24)
@@ -71,6 +87,259 @@ class PhantomFeudClient:
         
         self.last_position_send = 0
         self.position_send_delay = 0.05
+    
+    def draw_main_menu(self):
+        """Draw the main menu with 3 options"""
+        self.screen.fill(BLACK)
+        
+        title_font_path = "assets/fonts/second.otf"
+        
+        try:
+            title_img = pygame.image.load(title_font_path).convert_alpha()
+            title_img = pygame.transform.scale(title_img, (400, 100))
+            title_rect = title_img.get_rect(center=(SCREEN_WIDTH//2, 80))
+            self.screen.blit(title_img, title_rect)
+        except:
+            try: 
+                title = self.big_font.render("PHANTOM FEUD", True, GOLD)
+            except:
+                title = self.font.render("PHANTOM FEUD", True, GOLD)
+            title_rect = title.get_rect(center=(SCREEN_WIDTH//2, 80))
+            self.screen.blit(title, title_rect)
+                
+        subtitle = self.font.render("Choose Your Option", True, WHITE)
+        subtitle_rect = subtitle.get_rect(center=(SCREEN_WIDTH//2, 140))
+        self.screen.blit(subtitle, subtitle_rect)
+        
+        button_width = 250
+        button_height = 50
+        spacing = 20
+        start_y = 220
+        
+        self.p1_button_rect = pygame.Rect(SCREEN_WIDTH//2 - button_width//2, start_y, button_width, button_height)
+        self.p2_button_rect = pygame.Rect(SCREEN_WIDTH//2 - button_width//2, start_y + button_height + spacing, button_width, button_height)
+        self.bg_button_rect = pygame.Rect(SCREEN_WIDTH//2 - button_width//2, start_y + (button_height + spacing)*2, button_width, button_height)
+        
+        self.play_button_rect = pygame.Rect(SCREEN_WIDTH//2 - button_width//2, start_y + (button_height + spacing)*3, button_width, button_height)
+        
+        mouse_pos = pygame.mouse.get_pos() 
+        
+        p1_color = (80, 80, 200) if self.p1_button_rect.collidepoint(mouse_pos) else (50, 50, 150)
+        pygame.draw.rect(self.screen, p1_color, self.p1_button_rect)
+        pygame.draw.rect(self.screen, WHITE, self.p1_button_rect, 2)
+        p1_text = self.font.render("PLAYER 1 (Arrow Keys)", True, WHITE)
+        p1_text_rect = p1_text.get_rect(center=self.p1_button_rect.center)
+        self.screen.blit(p1_text, p1_text_rect)
+        
+        p2_color = (80,200,80) if self.p2_button_rect.collidepoint(mouse_pos) else (50,150,50)
+        pygame.draw.rect(self.screen, p2_color, self.p2_button_rect)
+        pygame.draw.rect(self.screen, WHITE, self.p2_button_rect, 2)
+        p2_text = self.font.render("PLAYER 2 (WASD)", True, WHITE)
+        p2_text_rect = p2_text.get_rect(center=self.p2_button_rect.center)
+        self.screen.blit(p2_text, p2_text_rect)
+        
+        bg_color = (200, 150, 80) if self.bg_button_rect.collidepoint(mouse_pos) else (150, 100, 50)
+        pygame.draw.rect(self.screen, bg_color, self.bg_button_rect)
+        pygame.draw.rect(self.screen, WHITE, self.bg_button_rect, 2)
+        bg_text = self.font.render("BACKGROUND", True, WHITE)
+        bg_text_rect = bg_text.get_rect(center=self.bg_button_rect.center)
+        self.screen.blit(bg_text, bg_text_rect)
+        
+        play_color = (0, 150, 0) if self.play_button_rect.collidepoint(mouse_pos) else (0, 100, 0)
+        pygame.draw.rect(self.screen, play_color, self.play_button_rect)
+        pygame.draw.rect(self.screen, WHITE, self.play_button_rect, 2)
+        play_text = self.font.render("PLAY", True, WHITE)
+        play_text_rect = play_text.get_rect(center=self.play_button_rect.center)
+        self.screen.blit(play_text, play_text_rect)
+        
+        y_offset = SCREEN_HEIGHT - 100
+        if self.confirmed_character_p1:
+            p1_display = self.font.render(f"P1: {self.confirmed_character_p1}", True, GRAY)
+            self.screen.blit(p1_display, (20, y_offset))
+            y_offset += 30
+        if self.confirmed_character_p2:
+            p2_display = self.font.render(f"P2: {self.confirmed_character_p2}", True, GRAY)
+            self.screen.blit(p2_display, (20, y_offset))
+            y_offset += 30
+        if self.confirmed_background:
+            bg_display = self.font.render(f"Arena: Battleground {self.confirmed_background}", True, GRAY)
+            self.screen.blit(bg_display, (20, y_offset))
+            y_offset += 30
+        if self.confirmed_character_p1 and self.confirmed_character_p2 and self.confirmed_background:
+            ready_text = self.font.render("READY! Press ENTER to start", True, GREEN)
+            ready_rect = ready_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT - 30))
+            self.screen.blit(ready_text, ready_rect)
+
+    def draw_character_select_screen(self):
+        """Separate screen for choosing character only"""
+        self.screen.fill(BLACK)
+        
+        title = self.big_font.render(f"{self.selected_player.upper()} SELECT YOUR WARRIOR", True, GOLD)
+        title_rect = title.get_rect(center=(SCREEN_WIDTH//2, 60))
+        self.screen.blit(title, title_rect)
+        
+        char_name = self.available_characters[self.selected_character_index]
+        
+        char_path =  f"assets/characters/{char_name}/main.png"
+        if os.path.exists(char_path):
+            img = pygame.image.load(char_path).convert_alpha()
+            img = pygame.transform.scale(img, (200, 200))
+            rect = img.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
+            self.screen.blit(img, rect)
+            
+        name_text = self.big_font.render(char_name.upper().replace('_', ' '), True, WHITE)
+        name_rect = name_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2 + 130))
+        self.screen.blit(name_text, name_rect)
+        
+        mouse_pos = pygame.mouse.get_pos()
+        
+        left_rect = pygame.Rect(SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 - 40, 50, 50)
+        pygame.draw.rect(self.screen, (100,100,100), left_rect)
+        pygame.draw.rect(self.screen, WHITE, left_rect, 2)
+        left_text = self.big_font.render("<", True, WHITE)
+        self.screen.blit(left_text, left_text.get_rect(center=left_rect.center))
+        self.left_arrow_rect = left_rect
+        
+        right_rect = pygame.Rect(SCREEN_WIDTH//2 + 100, SCREEN_HEIGHT//2 - 40, 50, 50)
+        pygame.draw.rect(self.screen, (100,100,100), right_rect)
+        pygame.draw.rect(self.screen, WHITE, right_rect, 2)
+        right_text = self.big_font.render(">", True, WHITE)
+        self.screen.blit(right_text, right_text.get_rect(center=right_rect.center))
+        self.right_arrow_rect = right_rect
+        
+        if self.selected_player == "p1":
+            controls_text = self.font.render("Controls: ARROW KEYS", True, GOLD)
+        else:
+            controls_text = self.font.render("Controls: WASD", True, GOLD)
+        controls_rect = controls_text.get_rect(bottomright=(SCREEN_WIDTH - 20, SCREEN_HEIGHT - 20))
+        self.screen.blit(controls_text, controls_rect)
+        
+        ok_rect = pygame.Rect(SCREEN_WIDTH//2 - 60, SCREEN_HEIGHT - 70, 120, 40)
+        pygame.draw.rect(self.screen, (0,100,0), ok_rect)
+        pygame.draw.rect(self.screen, WHITE, ok_rect, 2)
+        ok_text = self.font.render("OK", True, WHITE)
+        self.screen.blit(ok_text, ok_text.get_rect(center=ok_rect.center))
+        self.ok_rect = ok_rect
+        
+    def draw_background_select_screen(self):
+        """Separate screen for choosing background only"""
+        if self.backgrounds:
+            self.screen.blit(self.backgrounds[self.selected_background], (0,0))
+            
+        title = self.big_font.render("SELECT ARENA", True, GOLD)
+        title_rect = title.get_rect(center=(SCREEN_WIDTH//2, 60))
+        self.screen.blit(title, title_rect)
+        
+        preview = pygame.transform.scale(self.backgrounds[self.selected_background], (500, 350))
+        preview_rect = preview.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT//2))
+        self.screen.blit(preview, preview_rect)
+        
+        bg_name = f"BATTLEGROUND {self.selected_background + 1}"
+        name_text = self.big_font.render(bg_name, True, WHITE)
+        name_rect = name_text.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT - 120))
+        self.screen.blit(name_text, name_rect)
+        
+        mouse_pos = pygame.mouse.get_pos()
+            
+        up_rect = pygame.Rect(SCREEN_WIDTH//2 - 180, SCREEN_HEIGHT//2 - 30, 50, 50)
+        pygame.draw.rect(self.screen, (100,100,100), up_rect)
+        pygame.draw.rect(self.screen, WHITE, up_rect, 2)
+        up_text = self.big_font.render("↑", True, WHITE)
+        self.screen.blit(up_text, up_text.get_rect(center=up_rect.center))
+        self.up_arrow_rect = up_rect
+        
+        down_rect = pygame.Rect(SCREEN_WIDTH//2 + 130, SCREEN_HEIGHT//2 - 30, 50, 50)
+        pygame.draw.rect(self.screen, (100,100,100), down_rect)
+        pygame.draw.rect(self.screen, WHITE, down_rect, 2)
+        down_text = self.big_font.render("↓", True, WHITE)
+        self.screen.blit(down_text, down_text.get_rect(center=down_rect.center))
+        self.down_arrow_rect = down_rect
+        
+        ok_rect = pygame.Rect(SCREEN_WIDTH//2 - 60, SCREEN_HEIGHT - 70, 120, 40)
+        pygame.draw.rect(self.screen, (0,100,0), ok_rect)
+        pygame.draw.rect(self.screen, WHITE, ok_rect, 2)
+        ok_text = self.font.render("OK", True, WHITE)
+        self.screen.blit(ok_text, ok_text.get_rect(center=ok_rect.center))
+        self.ok_rect = ok_rect
+        
+    def handle_menu(self):
+        """Main menu loop"""
+        while self.menu_state != "done":
+            if self.menu_state == "main":
+                self.draw_main_menu()
+            elif self.menu_state == "character_select":
+                self.draw_character_select_screen()
+            elif self.menu_state == "background_select":
+                self.draw_background_select_screen()
+            
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.running = False
+                    return None, None, None
+                
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if self.menu_state == "main":
+                        if self.p1_button_rect.collidepoint(event.pos):
+                            self.menu_state = "character_select"
+                            self.selected_player = "p1"
+                        elif self.p2_button_rect.collidepoint(event.pos):
+                            self.menu_state = "character_select"
+                            self.selected_player = "p2"
+                        elif self.bg_button_rect.collidepoint(event.pos):
+                            self.menu_state = "background_select"
+                        elif self.play_button_rect.collidepoint(event.pos):
+                            if self.confirmed_character_p1 and self.confirmed_character_p2 and self.confirmed_background:
+                                self.menu_state = "done"
+                    elif self.menu_state == "character_select":
+                        if hasattr(self, 'ok_rect') and self.ok_rect.collidepoint(event.pos):
+                            if self.selected_player == "p1":
+                                self.confirmed_character_p1 = self.available_characters[self.selected_character_index]
+                                print(f"Saved P1 character: {self.confirmed_character_p1}")
+                            else:
+                                self.confirmed_character_p2 = self.available_characters[self.selected_character_index]
+                                print(f"Saved P2 character: {self.confirmed_character_p2}")
+                            self.menu_state = "main"
+                        elif hasattr(self, 'left_arrow_rect') and self.left_arrow_rect.collidepoint(event.pos):
+                            self.selected_character_index = (self.selected_character_index - 1) % len(self.available_characters)
+                        elif hasattr(self, 'right_arrow_rect') and self.right_arrow_rect.collidepoint(event.pos):
+                            self.selected_character_index = (self.selected_character_index + 1) % len(self.available_characters)
+                    elif self.menu_state == "background_select":
+                        if hasattr(self, 'ok_rect') and self.ok_rect.collidepoint(event.pos):
+                            self.confirmed_background = self.selected_background + 1
+                            self.menu_state = "main"
+                        elif hasattr(self, 'up_arrow_rect') and self.up_arrow_rect.collidepoint(event.pos):
+                            self.selected_background = (self.selected_background - 1) % len(self.backgrounds)
+                        elif hasattr(self, 'down_arrow_rect') and self.down_arrow_rect.collidepoint(event.pos):
+                            self.selected_background = (self.selected_background + 1) % len(self.backgrounds)
+                
+                if event.type == pygame.KEYDOWN:
+                    if self.menu_state == "character_select":
+                        if event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                            self.selected_character_index = (self.selected_character_index - 1) % len(self.available_characters)
+                        elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                            self.selected_character_index = (self.selected_character_index + 1) % len(self.available_characters)
+                        elif event.key == pygame.K_RETURN:
+                            if self.selected_player == "p1":
+                                self.confirmed_character_p1 = self.available_characters[self.selected_character_index]
+                            else:
+                                self.confirmed_character_p2 = self.available_characters[self.selected_character_index]
+                            self.menu_state = "main"
+                    elif self.menu_state == "background_select":
+                        if event.key == pygame.K_UP:
+                            self.selected_background = (self.selected_background - 1) % len(self.backgrounds)
+                        elif event.key == pygame.K_DOWN:
+                            self.selected_background = (self.selected_background + 1) % len(self.backgrounds)
+                        elif event.key == pygame.K_RETURN:
+                            self.confirmed_background = self.selected_background + 1
+                            self.menu_state = "main"
+                    elif self.menu_state == "main" and event.key == pygame.K_RETURN:
+                        if self.confirmed_character_p1 and self.confirmed_character_p2 and self.confirmed_background:
+                            self.menu_state = "done"
+            
+            pygame.display.flip()
+            self.clock.tick(FPS)
+    
+        return self.confirmed_character_p1, self.confirmed_character_p2, self.confirmed_background
         
     def scan_characters(self):
         """Scan the assets/characters folder for available characters"""
@@ -237,7 +506,7 @@ class PhantomFeudClient:
             return 
         try:
             message = json.dumps({"type": msg_type, "data": data})
-            self.socket.send(message.encode())
+            self.socket.send((message + "\n").encode())
         except Exception as e:
             print(f"Send error: {e}")
             self.connected = False
@@ -249,10 +518,12 @@ class PhantomFeudClient:
                 data = self.socket.recv(4096)
                 if not data:
                     break
-                message = json.loads(data.decode())
-                self.handle_server_message(message)
+                for line in data.decode().strip().split('\n'):
+                    if line:
+                        message = json.loads(line)
+                        self.handle_server_message(message)
             except Exception as e:
-                print(f"Recieve error: {e}")
+                print(f"Receive error: {e}")
                 break
             
     def handle_server_message(self, message):
@@ -325,128 +596,24 @@ class PhantomFeudClient:
                 self.play_sound('dead')
             elif player_id in self.other_players:
                 self.other_players[player_id]['action'] = 'dead'
-                
-                
-    def character_select_screen(self):
-        """Show character selection menu"""
-        selecting = True
         
-        while selecting and self.running:
-            if self.backgrounds and self.selected_background < len(self.backgrounds):
-                self.screen.blit(self.backgrounds[self.selected_background], (0, 0))
-            else:
-                self.screen.fill(BLACK)
-                
-            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-            overlay.set_alpha(180)
-            overlay.fill(BLACK)
-            self.screen.blit(overlay, (0, 0))
-            
-            try:
-                title = self.big_font.render("PHANTOM FEUD", True, WHITE)
-            except:
-                title = self.font.render("PHANTOM FEUD", True, WHITE)
-            title_rect = title.get_rect(center=(SCREEN_WIDTH//2, 100))
-            self.screen.blit(title, title_rect)
-            
-            instr = self.font.render("Select Your Warrior", True, GRAY)
-            instr_rect = instr.get_rect(center=(SCREEN_WIDTH//2, 180))
-            self.screen.blit(instr, instr_rect)
-            
-            char_name = self.available_characters[self.selected_character_index]
-            
-            char_path = f"assets/characters/{char_name}/main.png"
-            preview_img = None 
-            
-            if os.path.exists(char_path):
-                try:
-                    preview_img = pygame.image.load(char_path).convert_alpha()
-                    preview_img = pygame.transform.scale(preview_img, (200, 200))
-                    print(f"Loaded main.png for {char_name}")
-                except Exception as e:
-                    preview_img = None
-                
-            if preview_img:
-                preview_rect = preview_img.get_rect(center=(SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 - 50))
-                self.screen.blit(preview_img, preview_rect)
-            else:
-                if char_name in self.character_animations:
-                    anim = self.character_animations[char_name]
-                    if 'idle' in anim and anim['idle']:
-                        fallback_img = pygame.transform.scale(anim['idle'][0], (150, 150))
-                        preview_rect = fallback_img.get_rect(center=(SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 - 50))
-                        self.screen.blit(fallback_img, preview_rect)
-                pygame.draw.rect(self.screen, GRAY, (SCREEN_WIDTH//2 - 230, SCREEN_HEIGHT//2 - 130, 260, 260), 3)
-                
-            name_text = self.font.render(char_name.upper().replace('_', ' '), True, WHITE)
-            name_rect = name_text.get_rect(center=(SCREEN_WIDTH//2 - 150, SCREEN_HEIGHT//2 + 120))
-            self.screen.blit(name_text, name_rect)
-            
-            bg_name = f"Battleground {self.selected_background + 1}"
-            bg_text = self.font.render("ARENA:", True, WHITE)
-            bg_text_rect = bg_text.get_rect(center=(SCREEN_WIDTH//2 + 150, SCREEN_HEIGHT//2 - 80))
-            self.screen.blit(bg_text, bg_text_rect)
-            
-            bg_name_text = self.font.render(bg_name, True, GOLD)
-            bg_name_rect = bg_name_text.get_rect(center=(SCREEN_WIDTH//2 + 150, SCREEN_HEIGHT//2 - 40))
-            self.screen.blit(bg_name_text, bg_name_rect)
-                             
-            if self.backgrounds and len(self.backgrounds)  >  self.selected_background:
-                small_bg = pygame.transform.scale(self.backgrounds[self.selected_background], (200, 150))
-            bg_preview_rect = small_bg.get_rect(center=(SCREEN_WIDTH//2 + 150, SCREEN_HEIGHT//2 + 40))
-            self.screen.blit(small_bg, bg_preview_rect)
-            pygame.draw.rect(self.screen, WHITE, bg_preview_rect, 3)
-            
-            controls = self.font.render("← →  Change Character", True, GRAY)
-            controls_rect = controls.get_rect(center=(SCREEN_WIDTH//2- 150, SCREEN_HEIGHT - 80))
-            self.screen.blit(controls, controls_rect)
-            
-            controls_bg = self.font.render("↑ ↓  Change Arena", True, GRAY)
-            controls_bg_rect = controls_bg.get_rect(center=(SCREEN_WIDTH//2 + 150, SCREEN_HEIGHT - 80))
-            self.screen.blit(controls_bg, controls_bg_rect)
-
-            controls_enter = self.font.render("ENTER  to Fight!", True, WHITE)
-            controls_enter_rect = controls_enter.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT - 40))
-            self.screen.blit(controls_enter, controls_enter_rect)
-            
-            pygame.display.flip()
-            
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    self.running = False
-                    return None
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_LEFT:
-                        self.selected_character_index = (self.selected_character_index - 1) % len(self.available_characters)
-                    elif event.key == pygame.K_RIGHT:
-                        self.selected_character_index = (self.selected_character_index + 1) % len(self.available_characters)
-                    elif event.key == pygame.K_UP:
-                        self.selected_background = (self.selected_background - 1) % len(self.backgrounds)
-                    elif event.key == pygame.K_DOWN:
-                        self.selected_background = (self.selected_background + 1) % len(self.backgrounds)
-                    elif event.key == pygame.K_RETURN:
-                        selecting = False
-            
-            self.clock.tick(FPS)
-        
-        return self.available_characters[self.selected_character_index]
     
     def run_game(self):
         """Main game loop"""
+        p1_char, p2_char, bg_num = self.handle_menu()
+        
+        if not p1_char or not p2_char or not bg_num:
+            print("Game setup cancelled")
+            return
+        
         if not self.connect_to_server():
             print("Failed to connect to server. Make sure server.py is running.")
             return
         
-        selected_character = self.character_select_screen()
-        if not selected_character:
-            return
-        if self.backgrounds and self.selected_background < len(self.backgrounds):
-            self.current_background = self.backgrounds[self.selected_background]
-        else:
-            self.current_background = self.backgrounds[0] if self.backgrounds else None
-        
-        self.send_message("character_select", {"character": selected_character})
-        self.my_character = selected_character
+        self.current_background = self.backgrounds[bg_num - 1] if self.backgrounds else None
+        self.my_character = p1_char
+        print(f"Using character: {self.my_character}")
+        self.send_message("character_select", {"character": p1_char})
         
         receive_thread = threading.Thread(target=self.receive_messages)
         receive_thread.daemon = True
@@ -456,15 +623,22 @@ class PhantomFeudClient:
         while self.my_id is None and timeout > 0 and self.running:
             pygame.time.wait(100)
             timeout -= 1
-            
+        
         if self.my_id is None:
             print("Failed to get player ID from server")
-            return 
+            return
         
         print("Game starting!")
         
         game_running = True
         current_time = 0
+        self.p1_character = p1_char
+        self.p2_character = p2_char
+
+        if p1_char not in self.character_animations:
+            self.character_animations[p1_char] = self.load_character_animations(p1_char)
+        if p2_char not in self.character_animations:
+            self.character_animations[p2_char] = self.load_character_animations(p2_char)
         
         while game_running and self.running:
             current_time = pygame.time.get_ticks() / 1000.0
@@ -473,14 +647,18 @@ class PhantomFeudClient:
                 if event.type == pygame.QUIT:
                     game_running = False
                 elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_SPACE or event.key == pygame.K_f:
-                        if self.attack_cooldown <= 0 and self.local_action != "dead":
-                            self.local_action = "attack"
-                            self.attack_cooldown = 30
-                            self.send_message("attack", {})
+                    if event.key == pygame.K_SPACE:  # Player 1 attack
+                        if self.attack_cooldown_p1 <= 0 and self.p1_action != "dead":
+                            self.p1_action = "attack"
+                            self.attack_cooldown_p1 = 30
+                            self.play_sound('hit')
+                    elif event.key == pygame.K_f:  # Player 2 attack
+                        if self.attack_cooldown_p2 <= 0 and self.p2_action != "dead":
+                            self.p2_action = "attack"
+                            self.attack_cooldown_p2 = 30
                             self.play_sound('hit')
                     elif event.key == pygame.K_e:
-                        if self.special_cooldown <= 0 and self.local_action != "dead":
+                        if self.special_cooldown <= 0 and self.p1_action != "dead":
                             ability = None
                             if self.my_character in ["Samurai", "Shinobi", "Default"]:
                                 ability = "shield"
@@ -502,66 +680,69 @@ class PhantomFeudClient:
                                     self.play_sound('protect')
             
             keys = pygame.key.get_pressed()
-            dx = 0
-            dy = 0
             move_speed = 5
             
-            if keys[pygame.K_w] or keys[pygame.K_UP]:
-                dy = -move_speed
-                self.local_direction = "up"
-            if keys[pygame.K_s] or keys[pygame.K_DOWN]:
-                dy = move_speed
-                self.local_direction = "down"
-            if keys[pygame.K_a] or keys[pygame.K_LEFT]:
-                dx = -move_speed
-                self.local_direction = "left"
-            if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-                dx = move_speed
-                self.local_direction = "right"
+            if keys[pygame.K_UP]:
+                self.p1_y -= move_speed
+                self.p1_direction = "up"
+                self.p1_action = "walk"
+            if keys[pygame.K_DOWN]:
+                self.p1_y += move_speed
+                self.p1_direction = "down"
+                self.p1_action = "walk"
+            if keys[pygame.K_LEFT]:
+                self.p1_x -= move_speed
+                self.p1_direction = "left"
+                self.p1_action = "walk"
+            if keys[pygame.K_RIGHT]:
+                self.p1_x += move_speed
+                self.p1_direction = "right"
+                self.p1_action = "walk"
                 
-            if (dx != 0 or dy != 0) and self.local_action not in ["attack", "hurt", "dead"]:
-                if abs(dx) + abs(dy) > move_speed:
-                    if self.local_action != "run":
-                        self.local_action = "run"
-                else:
-                    if self.local_action != "walk":
-                        self.local_action = "walk"
+                
+            if keys[pygame.K_w]:
+                self.p2_y -= move_speed
+                self.p2_direction = "up"
+                self.p2_action = "walk"
+            if keys[pygame.K_s]:
+                self.p2_y += move_speed
+                self.p2_direction = "down"
+                self.p2_action = "walk"
+            if keys[pygame.K_a]:
+                self.p2_x -= move_speed
+                self.p2_direction = "left"
+                self.p2_action = "walk"
+            if keys[pygame.K_d]:
+                self.p2_x += move_speed
+                self.p2_direction = "right"
+                self.p2_action = "walk"
+                
+            self.p1_x = max(50, min(SCREEN_WIDTH - 50, self.p1_x))
+            self.p1_y = max(50, min(SCREEN_HEIGHT - 50, self.p1_y))
+            self.p2_x = max(50, min(SCREEN_WIDTH - 50, self.p2_x))
+            self.p2_y = max(50, min(SCREEN_HEIGHT - 50, self.p2_y))
                         
-                if current_time - self.last_position_send > self.position_send_delay:
-                    self.send_message("movement", {
-                        "x": self.local_x,
-                        "y": self.local_y,
-                        "direction": self.local_direction
-                    })
-                    self.last_position_send = current_time
-                    
-            else:
-                if self.local_action not in ["attack", "hurt", "dead"] and self.local_action not in ["run", "walk"]:
-                    self.local_action = "idle"
-                    
-            if dx != 0 or dy != 0:
-                self.local_x += dx
-                self.local_y += dy
-                self.local_x = max(50, min(SCREEN_WIDTH - 50, self.local_x))
-                self.local_y = max(50, min(SCREEN_HEIGHT - 50, self.local_y))
-                
-            if self.attack_cooldown > 0:
-                self.attack_cooldown -= 1
-                if self.attack_cooldown == 0 and self.local_action == "attack":
-                    self.local_action = "idle"
-                    
+            if self.attack_cooldown_p1 > 0:
+                self.attack_cooldown_p1 -= 1
+                if self.attack_cooldown_p1 == 0 and self.p1_action == "attack":
+                    self.p1_action = "idle"
+
+            if self.attack_cooldown_p2 > 0:
+                self.attack_cooldown_p2 -= 1
+                if self.attack_cooldown_p2 == 0 and self.p2_action == "attack":
+                    self.p2_action = "idle"
+                        
             if self.special_cooldown > 0:
                 self.special_cooldown -= 1
-                
+            
             if current_time - self.last_animation_update > self.animation_speed:
                 self.last_animation_update = current_time
                 self.current_animation_frame = (self.current_animation_frame + 1) % 6
-                
-            self.draw_game()
             
+            self.draw_game()
             pygame.display.flip()
             self.clock.tick(FPS)
-            
+        
         self.connected = False
         if self.socket:
             self.socket.close()
@@ -573,53 +754,26 @@ class PhantomFeudClient:
         else:
             self.screen.fill(BLACK)
         
-        for x in range(0, SCREEN_WIDTH, 50):
-            pygame.draw.line(self.screen, GRAY, (x, 0), (x, SCREEN_HEIGHT), 1)
-        for y in range(0, SCREEN_HEIGHT, 50):
-            pygame.draw.line(self.screen, GRAY, (0, y), (SCREEN_WIDTH, y), 1)
-            
-        for player_id, player in self.other_players.items():
-            self.draw_character(
-                player['x'], player['y'],
-                player['character'],
-                player.get('action', 'idle'),
-                player.get('direction', 'down')
-            )
-            self.draw_health_bar(
-                player['x'], player['y'] - 60,
-                player.get('health', 100),
-                player.get('max_health', 100)
-            )
-            
-        self.draw_character(
-            self.local_x, self.local_y,
-            self.my_character,
-            self.local_action,
-            self.local_direction
-        )
-        self.draw_health_bar(
-            self.local_x, self.local_y - 60,
-            self.local_health,
-            self.local_max_health
-        )
+        self.draw_character(self.p1_x, self.p1_y, self.p1_character, self.p1_action, self.p1_direction)
+        self.draw_health_bar(self.p1_x, self.p1_y -60, self.p1_health, self.p1_max_health)
         
-        if self.attack_cooldown > 0:
-            cooldown_text = self.font.render(f"Attack: {self.attack_cooldown//6}", True, GRAY)
-            self.screen.blit(cooldown_text, (10, 60))
-            
-        if self.special_cooldown > 0:
-            special_text = self.font.render(f"Special: {self.special_cooldown//6}", True, GRAY)
-            self.screen.blit(special_text, (10, 90))
-            
-        self.draw_large_health_bar(10, 10, self.local_health, self.local_max_health)
+        self.draw_character(self.p2_x, self.p2_y, self.p2_character, self.p2_action, self.p2_direction)
+        self.draw_health_bar(self.p2_x, self.p2_y - 60, self.p2_health, self.p2_max_health)
         
-        try:
-            controls = self.font.render("WASD/Arrows: Move | SPACE/F: Attack | E: Special", True, WHITE)
+        p1_label = self.font.render("PLAYER 1", True, WHITE)
+        p1_label_rect = p1_label.get_rect(center=(self.p1_x, self.p1_y - 75))
+        self.screen.blit(p1_label, p1_label_rect)
+        
+        p2_label = self.font.render("PLAYER 2", True, WHITE)
+        p2_label_rect = p2_label.get_rect(center=(self.p2_x, self.p2_y - 75))
+        self.screen.blit(p2_label, p2_label_rect)
+        
+        try: 
+            controls = self.font.render("P1: Arrow Keys | SPACE Attack | P2: WASD | F Attack", True, WHITE)
             controls_rect = controls.get_rect(center=(SCREEN_WIDTH//2, SCREEN_HEIGHT - 20))
             self.screen.blit(controls, controls_rect)
         except:
             pass
-        
         
     def draw_character(self, x, y, character_name, action, direction):
         """Draw a character with current animation"""
@@ -658,7 +812,7 @@ class PhantomFeudClient:
                 
                 return
             
-        color = BLUE if character_name == self.my_character else RED
+        color = BLUE if character_name == self.p1_character or character_name == self.p2_character else RED
         pygame.draw.rect(self.screen, color, (int(x) - 25, int(y) - 25, 50, 50))
         pygame.draw.circle(self.screen, WHITE, (int(x), int(y)), 5)
             

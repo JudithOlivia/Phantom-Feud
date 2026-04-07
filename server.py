@@ -60,10 +60,10 @@ class GameServer:
 
         self.players[player_id] = player_info
 
-        client_socket.send(json.dumps({
+        client_socket.send((json.dumps({
             "type": "init",
             "data": {"id": player_id, "character": character}
-        }).encode())
+        }) + "\n").encode())
 
         self.broadcast("player_joined", {
             "id": player_id,
