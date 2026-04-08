@@ -90,7 +90,13 @@ class PhantomFeudClient:
     
     def draw_main_menu(self):
         """Draw the main menu with 3 options"""
-        self.screen.fill(BLACK)
+        if self.current_background:
+            self.screen.blit(self.current_background, (0, 0))
+        
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        overlay.set_alpha(180)
+        overlay.fill(BLACK)
+        self.screen.blit(overlay, (0, 0))
         
         title_font_path = "assets/fonts/second.otf"
         
@@ -306,6 +312,7 @@ class PhantomFeudClient:
                     elif self.menu_state == "background_select":
                         if hasattr(self, 'ok_rect') and self.ok_rect.collidepoint(event.pos):
                             self.confirmed_background = self.selected_background + 1
+                            self.current_background = self.backgrounds[self.selected_background]
                             self.menu_state = "main"
                         elif hasattr(self, 'up_arrow_rect') and self.up_arrow_rect.collidepoint(event.pos):
                             self.selected_background = (self.selected_background - 1) % len(self.backgrounds)
@@ -582,8 +589,8 @@ class PhantomFeudClient:
             new_health = data.get("new_health")
             
             if target_id == self.my_id:
-                self.local_health = new_health 
-                self.local_action = "hurt"
+                self.p1_health = new_health 
+                self.p1_action = "hurt"
                 self.play_sound('hit')
             elif target_id in self.other_players:
                 self.other_players[target_id]['health'] = new_health
@@ -592,7 +599,7 @@ class PhantomFeudClient:
         elif msg_type == "player_died":
             player_id = data.get("id")
             if player_id == self.my_id:
-                self.local_action = "dead"
+                self.p1_action = "dead"
                 self.play_sound('dead')
             elif player_id in self.other_players:
                 self.other_players[player_id]['action'] = 'dead'
@@ -642,6 +649,9 @@ class PhantomFeudClient:
         
         while game_running and self.running:
             current_time = pygame.time.get_ticks() / 1000.0
+            keys = pygame.key.get_pressed()
+            move_speed = 5
+            self.ground_line_y = SCREEN_HEIGHT // 2
             
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -673,23 +683,22 @@ class PhantomFeudClient:
                             elif self.my_character in ["Countess_Vampire"]:
                                 ability = "blood_charge"
                             if ability:
-                                self.local_action = ability
+                                self.p1_action = ability
                                 self.special_cooldown = 120
                                 self.send_message("special", {"ability": ability})
                                 if ability in ['protect', 'shield']:
                                     self.play_sound('protect')
-            
-            keys = pygame.key.get_pressed()
-            move_speed = 5
-            
+                                                
             if keys[pygame.K_UP]:
-                self.p1_y -= move_speed
-                self.p1_direction = "up"
-                self.p1_action = "walk"
+                if self.p1_y - move_speed >= self.ground_line_y:
+                    self.p1_y -= move_speed
+                    self.p1_direction = "up"
+                    self.p1_action = "walk"
             if keys[pygame.K_DOWN]:
-                self.p1_y += move_speed
-                self.p1_direction = "down"
-                self.p1_action = "walk"
+                if self.p1_y + move_speed <= SCREEN_HEIGHT - 50:
+                    self.p1_y += move_speed
+                    self.p1_direction = "down"
+                    self.p1_action = "walk"
             if keys[pygame.K_LEFT]:
                 self.p1_x -= move_speed
                 self.p1_direction = "left"
@@ -698,16 +707,17 @@ class PhantomFeudClient:
                 self.p1_x += move_speed
                 self.p1_direction = "right"
                 self.p1_action = "walk"
-                
-                
+                    
             if keys[pygame.K_w]:
-                self.p2_y -= move_speed
-                self.p2_direction = "up"
-                self.p2_action = "walk"
+                if self.p2_y - move_speed >= self.ground_line_y:
+                    self.p2_y -= move_speed
+                    self.p2_direction = "up"
+                    self.p2_action = "walk"
             if keys[pygame.K_s]:
-                self.p2_y += move_speed
-                self.p2_direction = "down"
-                self.p2_action = "walk"
+                if self.p2_y + move_speed <= SCREEN_HEIGHT - 50:
+                    self.p2_y += move_speed
+                    self.p2_direction = "down"
+                    self.p2_action = "walk"
             if keys[pygame.K_a]:
                 self.p2_x -= move_speed
                 self.p2_direction = "left"
